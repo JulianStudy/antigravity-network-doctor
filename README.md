@@ -1,6 +1,6 @@
 # Antigravity Network Doctor
 
-A macOS tool for comparing DNS, TLS, and Google Antigravity Agent behavior before and after a network change. It produces a redacted Markdown report in Chinese.
+A macOS tool for comparing three samples per network path before and after a network change. It checks the system route and the configured static proxy, records Google Antigravity Agent results separately, and produces a redacted Markdown report in Chinese.
 
 ## 在 Mac 上使用
 
@@ -35,8 +35,10 @@ python3 agy_doctor.py compare before.json after.json > antigravity-report-compar
 
 ## 怎样看报告
 
-- **DNS** 记录 macOS 系统解析返回了哪个地址族。TUN 的 Fake IP 也可能形成有效的系统解析结果。
-- **TLS** 使用系统 curl 验证证书，并对两个固定 Google API 域名的根路径发无认证的 HTTPS HEAD 请求。系统级 VPN/TUN 可能参与路由，curl 探测会忽略 HTTP 代理设置。根路径响应 HTTP 404 仍可证明探测收到 HTTPS 响应。
+- **采样**　每轮对两个固定 Google API 域名分别测三次。每个路径显示各结果出现次数。耗时中位数只计算收到 HTTP 响应且有计时的样本，包含连接和请求。旧版快照仍可对比，会显示原来的一次采样与缺失字段。
+- **系统路由**　使用 macOS 系统解析，再用 curl 发无认证 HTTPS HEAD 请求。该路径忽略应用层代理设置，仍可能经过 VPN/TUN。DNS 返回的地址可能是 TUN 提供的 Fake IP。
+- **系统代理**　读取 macOS 当前静态 HTTPS 代理。没有配置时使用启用的静态 SOCKS 代理。探测强制经过该端点，不应用目标域名的代理例外。目标 DNS 交给代理，TCP 表示连接到代理；HTTPS CONNECT 响应单独显示。启用 PAC 或自动发现时，报告标记为未采集该路径。
+- **TLS 与 HTTP**　默认验证目标证书。根路径返回 HTTP 404 仍可证明探测收到了 HTTPS 响应。
 - **应用** 使用用户复制的 Antigravity debug info，或用户实测确认的回复。仅凭 DNS、TLS 和 HTTP 探测无法确认 Agent 可用、网络出口身份或账号地区。
 - **脱敏** 使用固定中文文案、状态枚举和有限范围的数字重新生成快照与 Markdown。输出省略原始日志、追踪标识、账号信息、请求头、IP 地址和精确时间。工具把探测请求发给固定的 Google 域名，诊断数据留在本机。工具不会切换节点或修改网络设置。
 

@@ -14,14 +14,19 @@ import agy_network
 
 
 class NetworkTest(unittest.TestCase):
+    def setUp(self):
+        proxy = patch.object(agy_network, "system_proxy", return_value=("disabled", None))
+        proxy.start()
+        self.addCleanup(proxy.stop)
+
     def test_probe_uses_verified_tls_and_does_not_keep_addresses(self):
         responses = [
             subprocess.CompletedProcess([], 0, stdout="ip_address: 192.0.2.1\nipv6_address: 2001:db8::1\n"),
-            subprocess.CompletedProcess([], 0, stdout="404 0.048 0\n"),
+            subprocess.CompletedProcess([], 0, stdout="404 0.048 0 0.010 000 0.052\n"),
         ]
         with patch.object(agy_network.subprocess, "run", side_effect=responses) as run:
             result = agy_network.probe("daily-cloudcode-pa.googleapis.com")
-        self.assertEqual(result, {"dns": "a_and_aaaa", "tls": "verified", "http": 404})
+        self.assertEqual(result, agy_network.sample("a_and_aaaa", "verified", tcp="connected", http=404, elapsed_ms=52))
         curl = run.call_args.args[0]
         self.assertEqual(curl[:2], ["/usr/bin/curl", "--disable"])
         self.assertIn("--noproxy", curl)
@@ -34,7 +39,7 @@ class NetworkTest(unittest.TestCase):
         ]
         with patch.object(agy_network.subprocess, "run", side_effect=responses):
             result = agy_network.probe("daily-cloudcode-pa.googleapis.com")
-        self.assertEqual(result, {"dns": "timeout", "tls": "certificate_error", "http": None})
+        self.assertEqual(result, agy_network.sample("timeout", "certificate_error"))
 
     def test_timeout_after_successful_tls_preserves_handshake(self):
         result = subprocess.CompletedProcess([], 28, stdout="000 0.050 0\n")
@@ -42,7 +47,7 @@ class NetworkTest(unittest.TestCase):
 
     def test_comparison_distinguishes_app_recovery_from_network_probes(self):
         debug = 'Error: HTTP 400 Bad Request\n{"error":{"code":400,"status":"FAILED_PRECONDITION","message":"User location is not supported for the API use.","details":"private-fixture"}}'
-        same_probe = {"dns": "a", "tls": "verified", "http": 404}
+        same_probe = agy_network.sample("a", "verified", tcp="connected", http=404)
         with patch.object(agy_network, "probe", return_value=same_probe):
             before = agy_network.capture(agy_doctor.parse_debug(debug))
             after = agy_network.capture(agy_network.app_observation("confirmed_success"))
@@ -53,7 +58,7 @@ class NetworkTest(unittest.TestCase):
         self.assertNotIn("private-fixture", report)
 
     def test_missing_app_evidence_does_not_claim_recovery(self):
-        same_probe = {"dns": "a", "tls": "verified", "http": 404}
+        same_probe = agy_network.sample("a", "verified", tcp="connected", http=404)
         with patch.object(agy_network, "probe", return_value=same_probe):
             before = agy_network.capture(agy_doctor.parse_debug("Error: HTTP 429"))
             after = agy_network.capture(agy_network.app_observation("not_tested"))
@@ -62,7 +67,7 @@ class NetworkTest(unittest.TestCase):
 
     def test_wizard_rejects_stale_clipboard_and_saves_clean_markdown(self):
         raw = "Error: HTTP 429 Too Many Requests"
-        same_probe = {"dns": "a", "tls": "verified", "http": 404}
+        same_probe = agy_network.sample("a", "verified", tcp="connected", http=404)
         out, err = io.StringIO(), io.StringIO()
         with tempfile.TemporaryDirectory() as directory:
             original = Path.cwd()
@@ -85,7 +90,7 @@ class NetworkTest(unittest.TestCase):
         self.assertIn("应用测试恢复", out.getvalue())
 
     def test_imported_snapshot_cannot_echo_injected_text(self):
-        same_probe = {"dns": "a", "tls": "verified", "http": 404}
+        same_probe = agy_network.sample("a", "verified", tcp="connected", http=404)
         with patch.object(agy_network, "probe", return_value=same_probe):
             sample = agy_network.capture(agy_network.app_observation("not_tested"))
         sample["app"]["status"] = "private-fixture"
@@ -93,15 +98,15 @@ class NetworkTest(unittest.TestCase):
             agy_network.compare(sample, sample)
 
     def test_extra_probe_fields_are_rejected(self):
-        same_probe = {"dns": "a", "tls": "verified", "http": 404}
+        same_probe = agy_network.sample("a", "verified", tcp="connected", http=404)
         with patch.object(agy_network, "probe", return_value=same_probe):
             sample = agy_network.capture(agy_network.app_observation("not_tested"))
-        sample["probes"][agy_network.HOSTS[0]]["other"] = "private-fixture"
+        sample["probes"][agy_network.HOSTS[0]]["direct"][0]["other"] = "private-fixture"
         with self.assertRaisesRegex(ValueError, "快照格式无效"):
             agy_network.compare(sample, sample)
 
     def test_compare_cli_works_from_two_snapshot_files(self):
-        same_probe = {"dns": "a", "tls": "verified", "http": 404}
+        same_probe = agy_network.sample("a", "verified", tcp="connected", http=404)
         with patch.object(agy_network, "probe", return_value=same_probe):
             snapshot = agy_network.capture(agy_network.app_observation("not_tested"))
         with tempfile.TemporaryDirectory() as directory:

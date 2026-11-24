@@ -58,11 +58,11 @@ def prompt_app(stage, previous_digest=None):
 
 def wizard():
     before_app, before_digest = prompt_app("切换前")
-    print("正在采集切换前的 DNS 和 TLS…", file=sys.stderr)
+    print("正在采集切换前的系统路由和系统代理，每条可用路径三次…", file=sys.stderr)
     before = capture(before_app)
     terminal_prompt("请切换节点，等待网络连接稳定，然后按回车继续 > ")
     after, _ = prompt_app("切换后，保持相同账号、模型和提示词", before_digest)
-    print("正在采集切换后的 DNS 和 TLS…", file=sys.stderr)
+    print("正在采集切换后的系统路由和系统代理，每条可用路径三次…", file=sys.stderr)
     report = compare(before, capture(after))
     with tempfile.NamedTemporaryFile(
         mode="w", encoding="utf-8", prefix="antigravity-report-", suffix=".md",
