@@ -74,7 +74,8 @@ class NetworkTest(unittest.TestCase):
             os.chdir(directory)
             try:
                 with ExitStack() as stack:
-                    stack.enter_context(patch("builtins.input", side_effect=["", "", "", "s"]))
+                    stack.enter_context(patch("builtins.input", side_effect=["", "c", "", "", "c", "s"]))
+                    stack.enter_context(patch.object(agy_doctor, "read_new_error", return_value=None))
                     clipboard = stack.enter_context(patch.object(agy_doctor, "read_input", return_value=raw))
                     stack.enter_context(patch.object(agy_network, "probe", return_value=same_probe))
                     stack.enter_context(redirect_stdout(out))

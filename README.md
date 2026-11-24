@@ -10,9 +10,9 @@ A macOS tool for comparing three samples per network path before and after a net
 python3 agy_doctor.py wizard
 ```
 
-1. 在 Antigravity 里用当前模型发一条最小测试消息，例如「只回复 OK」。如果失败，点 **Copy debug info**，回到终端按回车。如果收到回复，输入 `s`。如果跳过应用测试，输入 `n`。
+1. 等终端提示后，在 Antigravity 里用当前模型发一条最小测试消息，例如「只回复 OK」。等本轮结束。成功就回终端输入 `s`，报错就按回车让工具检查本轮新增日志，跳过就输入 `n`。
 2. 等提示切换节点后，在 VPN 客户端切换，等连接稳定，再回到终端按回车。
-3. 用同一账号、模型和提示词再试一次，记录这次的错误或成功。每次失败都要重新点 **Copy debug info**，以免使用剪贴板里的旧报错。
+3. 用同一账号、模型和提示词再试一次。若自动检测不到错误，在 Antigravity 点 **Copy debug info**，再回终端输入 `c` 确认已复制这一轮的报错。
 4. 工具在终端显示结果，并在当前目录保存一份 `antigravity-report-*.md`。
 
 ## 命令行分步采集
@@ -39,8 +39,8 @@ python3 agy_doctor.py compare before.json after.json > antigravity-report-compar
 - **系统路由**　使用 macOS 系统解析，再用 curl 发无认证 HTTPS HEAD 请求。该路径忽略应用层代理设置，仍可能经过 VPN/TUN。DNS 返回的地址可能是 TUN 提供的 Fake IP。
 - **系统代理**　读取 macOS 当前静态 HTTPS 代理。没有配置时使用启用的静态 SOCKS 代理。探测强制经过该端点，不应用目标域名的代理例外。目标 DNS 交给代理，TCP 表示连接到代理；HTTPS CONNECT 响应单独显示。启用 PAC 或自动发现时，报告标记为未采集该路径。
 - **TLS 与 HTTP**　默认验证目标证书。根路径返回 HTTP 404 仍可证明探测收到了 HTTPS 响应。
-- **应用** 使用用户复制的 Antigravity debug info，或用户实测确认的回复。仅凭 DNS、TLS 和 HTTP 探测无法确认 Agent 可用、网络出口身份或账号地区。
-- **脱敏** 使用固定中文文案、状态枚举和有限范围的数字重新生成快照与 Markdown。输出省略原始日志、追踪标识、账号信息、请求头、IP 地址和精确时间。工具把探测请求发给固定的 Google 域名，诊断数据留在本机。工具不会切换节点或修改网络设置。
+- **应用**　向导在每轮开始时记录 Antigravity macOS App 日志 `~/Library/Logs/Antigravity/language_server.log` 的当前位置。仅尝试识别随后追加、格式符合且唯一的 Agent 终止错误。并发任务可能影响归属，建议每轮只运行发起的一条测试。如果日志不存在、被轮转、格式不匹配或有多条候选，会提示复制 debug info。成功由用户看到实际回复后确认。
+- **脱敏** 使用固定中文文案、状态枚举和有限范围的数字重新生成快照与 Markdown。原始日志只在本机内存处理。输出省略原始日志、追踪标识、账号信息、请求头、IP 地址和精确时间。工具把探测请求发给固定的 Google 域名，诊断数据留在本机。工具不会切换节点或修改网络设置。
 
 ## 测试
 

@@ -9,6 +9,7 @@ import sys
 import tempfile
 
 from agy_debug import MAX_INPUT_BYTES, make_report, parse_debug, read_input
+from agy_logs import mark, read_new_error
 from agy_network import app_observation, capture, compare
 
 
@@ -29,31 +30,46 @@ def terminal_prompt(prompt):
 
 
 def prompt_app(stage, previous_digest=None):
+    log_cursor = mark()
+    print(f"在 Antigravity 发一条最小测试消息（{stage}），等本轮请求结束。", file=sys.stderr)
+    use_clipboard = False
     while True:
-        print(
-            f"在 Antigravity 发一条最小测试消息（{stage}）。若失败，重新点 Copy debug info。",
-            file=sys.stderr,
+        prompt = (
+            "请点 Copy debug info，再回这里输入 c 确认已复制本轮报错。输入 s 记录成功，输入 n 跳过 > "
+            if use_clipboard else
+            "若报错，直接按回车读取本轮日志。输入 s 记录成功，输入 n 跳过 > "
         )
-        choice = terminal_prompt("按回车读取本轮报错，输入 s 记录成功，输入 n 跳过应用测试 > ")
+        choice = terminal_prompt(prompt)
         if choice in ("s", "n"):
             return app_observation("confirmed_success" if choice == "s" else "not_tested"), None
-        if not choice:
-            try:
-                raw = read_input(clipboard=True)
-            except ValueError:
-                print("无法读取剪贴板报错。请重新复制，或输入 n 跳过。", file=sys.stderr)
+        if not use_clipboard:
+            if choice:
+                print("请输入 s、n 或直接按回车。", file=sys.stderr)
                 continue
-            digest = hashlib.sha256(raw.strip().encode("utf-8")).digest()
-            if digest == previous_digest:
-                print("剪贴板与切换前相同。请复制本轮调试信息，或输入 n 跳过。", file=sys.stderr)
-                continue
-            result = parse_debug(raw)
-            if result["category"] == "unrecognized":
-                print("剪贴板里未识别到报错，请重新复制或跳过。", file=sys.stderr)
-                continue
-            return result, digest
-        else:
-            print("请输入 s、n 或直接按回车。", file=sys.stderr)
+            result = read_new_error(log_cursor)
+            if result:
+                print("已从本地日志识别本轮报错。", file=sys.stderr)
+                return result, previous_digest
+            print("本地日志未识别到单条可用的新报错。", file=sys.stderr)
+            use_clipboard = True
+            continue
+        if choice != "c":
+            print("复制本轮报错后输入 c，或输入 n 跳过。", file=sys.stderr)
+            continue
+        try:
+            raw = read_input(clipboard=True)
+        except ValueError:
+            print("无法读取剪贴板报错。请重新复制，或输入 n 跳过。", file=sys.stderr)
+            continue
+        digest = hashlib.sha256(raw.strip().encode("utf-8")).digest()
+        if digest == previous_digest:
+            print("剪贴板与切换前相同。请复制本轮调试信息，或输入 n 跳过。", file=sys.stderr)
+            continue
+        result = parse_debug(raw)
+        if result["category"] == "unrecognized":
+            print("剪贴板里未识别到报错，请重新复制或跳过。", file=sys.stderr)
+            continue
+        return result, digest
 
 
 def wizard():

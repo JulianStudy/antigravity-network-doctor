@@ -11,7 +11,7 @@ from agy_debug import DIAGNOSES, KNOWN_STATUSES, error_codes
 
 
 HOSTS = ("daily-cloudcode-pa.googleapis.com", "cloudcode-pa.googleapis.com")
-SNAPSHOT_VERSION = 2
+SNAPSHOT_VERSION = 3
 SAMPLE_COUNT = 3
 ROUTES = {"direct": "系统路由", "proxy": "系统代理"}
 PROXY_LABELS = {
@@ -205,13 +205,14 @@ def valid_code(value, min_code, max_code=599):
     return value is None or (type(value) is int and min_code <= value <= max_code)
 
 
-def validate_app(app):
+def validate_app(app, version):
     if set(app) != {"source", "category", "http", "api_code", "status"}:
         raise ValueError
     source = app["source"]
-    if source == "debug_info":
+    if source == "debug_info" or (source == "local_log" and version >= 3):
         if (
             app["category"] not in DIAGNOSES
+            or (source == "local_log" and (app["http"] is not None or app["category"] == "unrecognized"))
             or not valid_code(app["http"], 400)
             or not valid_code(app["api_code"], 400)
             or (app["status"] is not None and app["status"] not in KNOWN_STATUSES)
@@ -252,16 +253,16 @@ def validate_sample(row, route):
 
 
 def validated_snapshot(snapshot):
-    """读取 v1 和 v2 快照，渲染时仅使用受限的枚举和数字。"""
+    """读取 v1 至 v3 快照，渲染时仅使用受限的枚举和数字。"""
     try:
         version = snapshot["version"]
-        if type(version) is not int or version not in (1, SNAPSHOT_VERSION):
+        if type(version) is not int or version not in (1, 2, SNAPSHOT_VERSION):
             raise ValueError
         if version == 1:
             snapshot = adapt_legacy(snapshot)
         if set(snapshot) != {"version", "app", "proxy_state", "probes"}:
             raise ValueError
-        validate_app(snapshot["app"])
+        validate_app(snapshot["app"], version)
         state = snapshot["proxy_state"]
         probes = snapshot["probes"]
         if state not in PROXY_LABELS or (state == "legacy" and version != 1) or set(probes) != set(HOSTS):
@@ -281,17 +282,20 @@ def validated_snapshot(snapshot):
 
 
 def format_app(app):
-    if app["source"] != "debug_info":
+    if app["source"] in APP_LABELS:
         return APP_LABELS[app["source"]]
     title = DIAGNOSES[app["category"]][0]
     codes = error_codes(app)
-    return f"{title}（{codes}）" if codes else title
+    fields = [codes] if codes else []
+    if app["source"] == "local_log":
+        fields.append("来源为本地日志")
+    return f"{title}（{' · '.join(fields)}）" if fields else title
 
 
 def app_comparison(before, after):
     if after["source"] == "not_tested" or after["category"] == "unrecognized":
         return "缺少切换后的应用测试证据。请用同一账号、模型和最小提示词重试。"
-    before_error = before["source"] == "debug_info" and before["category"] != "unrecognized"
+    before_error = before["category"] not in (None, "unrecognized")
     if after["source"] == "confirmed_success":
         if before["source"] == "confirmed_success":
             return "两轮应用测试均收到 Agent 回复。"
