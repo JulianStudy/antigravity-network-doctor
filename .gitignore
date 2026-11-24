@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+before.json
+after.json
+antigravity-report-*.md
